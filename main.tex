@@ -1,0 +1,241 @@
+\documentclass{article}
+\usepackage{maa-monthly}
+\usepackage{tikz}
+\usepackage{pgfplots}
+
+\begin{document}
+
+\title{Exact Sampling}
+\author{The Author}
+
+\maketitle
+
+\begin{abstract}
+In this article we'll explore some novel means to generate random numbers without any loss in accuracy. 
+\end{abstract}
+
+
+\noindent
+\section{Introduction}
+
+Imagine we had access to an infinite supply of independent random bits equally likely to be 0 or 1. And suppose we were asked to simulate a weighted random bit with probability $p=0.25$ for 0 and 0.75 for 1. Using the infinite supply of bits at our command this is a straightforward task. Simply map the first two bits as follows:
+\[
+\begin{split}
+00 \rightarrow 0\\
+01 \rightarrow 1\\
+10 \rightarrow 1\\
+11 \rightarrow 1
+\end{split}
+\]
+This much is easy. But what if $p$ was a more complicated number such as $1/\pi$? This seems like a much more challenging task. Indeed, here is a "proof" that it is impossible to perform this task exactly.
+
+Any finite computation can only examine a finite number, say $n$, of the input bits. This sequence of $n$ input bits takes on every possible value with equal probability of $2^{-n}$. No matter what computation we perform on this sequence, ultimately 0 will result with some probability that is a multiple of $2^{-n}$. But $1/\pi$ isn't a multiple of $2^{-n}$ for any $n$. Even though we can make the error arbitrarily small, some will always remain.
+
+This argument seems very persuasive. And yet there is a loophole. Consider the following procedure.
+
+First, try thinking of the infinite sequence of random bits we have access to as an exact sample from the uniform distribution on the interval $[0,1]$, which has been given in binary. This sample falls below $1/\pi$ with probability $1/\pi$ exactly. But how do we compare two infinitely long sequences of digits? Here's how: Begin by writing out a few digits of the binary representation of $1/\pi$.
+$$\frac{1}{\pi} = 0.0101000101..._2$$
+Then compare the bits beyond the decimal point with the random bits we've been given.
+\[
+\begin{matrix}
+0 & 1 & 0 & 1 & 0 & 0 & 0 & 1 & 0 & 1\\
+\updownarrow & \updownarrow & \updownarrow & \updownarrow & \updownarrow & \updownarrow & \updownarrow & \updownarrow & \updownarrow & \updownarrow \\
+b_0 & b_1 & b_2 & b_3 & b_4 & b_5 & b_6 & b_7 & b_8 & b_9
+\end{matrix}
+\]
+If all of these bits miraculously agree with each other, just compute some more bits of $1/\pi$ and compare these with more random bits. Sooner or later we'll find a disagreement between these two sequences. At that point we know which is larger, the rest of the infinite sequence of bits of either number doesn't matter!
+
+We'll refer to this trick, originating as far as we are aware from \cite{Knuth-Yao}, as \textit{exact Bernoulli sampling}. It circumvents the "proof" given earlier by potentially running arbitrarily long. And yet it is by no means infeasible. The number of required comparisons follows a geometric distribution with $p=1/2$, so the expected number of required comparisons is a mere 2. Also note that we didn't depend in any way on special properties of $1/\pi$. We could have proceeded in the same way with any computable number imaginable as our $p$. The only component that can cause worry is the complexity of computing digits of $p$, though we won't meet any examples where this becomes a critical issue here. The plan for the rest of this discussion is to take exact Bernoulli sampling and milk it as much as possible.
+
+\section{Exact Discrete Sampling}
+
+\subsection{Exact Bisection Sampling}
+
+Say our next challenge was to draw exact samples from the Poisson distribution with parameter $\lambda = 5$. Here's how we could do it. First, find a rational number that is close to the median. (Using rationals just makes the procedure simpler.) As figure \ref{fig:bisection_0} demonstrates, using 4.5 as our midpoint will do nicely.
+
+\pgfmathdeclarefunction{poiss}{1}{%
+	\pgfmathparse{(#1^x)*exp(-#1)/(x!)}%
+}
+
+\begin{figure}[h]
+	\centering
+	\begin{tikzpicture}[scale=1.3]
+	\begin{axis}[tick label style={/pgf/number format/fixed}, every axis plot post/.append style={
+		samples at = {0,...,15},
+		axis x line*=bottom,
+		axis y line*=left,
+		enlargelimits=upper}]
+	\addplot +[ycomb] {poiss(5)};
+	\draw[red, very thick] (45, 0) -- (45, 200);
+	\end{axis}
+	\end{tikzpicture}
+	\caption{Approximate bisection of the Poisson distribution with $\lambda = 5$ using 4.5 as the mid point}
+	\label{fig:bisection_0}
+\end{figure}
+
+We can then compute the probability that any sample will fall on the left side of this line by computing the leading bits of the cumulative distribution function at 4.5.
+$$F(4.5) = 0.0111000011..._2$$
+where $F$ is the distribution function of the Poisson distribution with $\lambda = 5$. Using a few of these bits together with exact Bernoulli sampling we can now determine which way to proceed with our search.
+
+For the purpose of illustration, let's assume that our first bisection led us to the right. We then rescale our probabilities by conditioning on the fact that our sample is greater than 4.5 and bisect this new probability distribution as in figure \ref{fig:bisection_1}.
+
+\begin{figure}[h]
+	\centering
+	\begin{tikzpicture}[scale=1.3]
+	\begin{axis}[every axis plot post/.append style={
+		samples at = {5,...,20},
+		axis x line*=bottom,
+		axis y line*=left,
+		enlargelimits=upper}]
+	\addplot +[ycomb] {poiss(5)/0.5595};
+	\draw[red, very thick] (15, 0) -- (15, 350);
+	\end{axis}
+	\end{tikzpicture}
+	\caption{Approximately bisect the Poisson distribution above 4.5 using 6.5 as the new mid point}
+	\label{fig:bisection_1}
+\end{figure}
+
+At this point the idea should be clear. Keep bisecting the remaining range until only a single integer is the sole remaining possibility. That will then be our sample. As long as we don't choose our mid points in a completely silly fashion the number of steps we'll be walking off to the right will follow an approximately geometric distribution. And as soon as we turn back around we'll terminate very soon after.
+
+Of course, none of these considerations were very particular to the Poisson distribution with $\lambda = 5$. So this method is evidently applicable to virtually any discrete distribution one could care to name.
+
+\subsection{Exact Discrete Inverse Sampling}
+
+Another procedure that is in many respects quite similar can be constructed from inverse sampling. That is, if $X \sim \text{U}[0,1]$, then $F^{-1}(X)$ will be distributed according to the Poisson distribution with $\lambda = 5$ \footnote{to be exact $F^{-1}$ must be defined to return the smallest $n \in \mathbb{N}$ such that $F(n) \geq X$ (we use the convention that $\mathbb{N}$ includes 0)}. One way to visually represent this is by labeling the unit interval as in figure \ref{fig:inverse}. Then we drop a sample $X$ onto the line, observe which interval the sample fell in, and choose the next largest corresponding $n$ as our sample.
+
+\begin{figure}[t!]
+	\centering
+	\begin{tikzpicture}[scale=0.03\textwidth]
+	\draw (0,0) -- (1,0);
+	\draw (0.0067, -0.02) -- (0.0067, 0.02);
+	\draw (0.0404, -0.02) -- (0.0404, 0.02);
+	\draw (0.1246, -0.02) node[below]{$\hdots$}
+	-- (0.1246, 0.02);
+	\draw (0.2650, -0.02) node[below]{$F(3)$}
+	-- (0.2650, 0.02);
+	\draw (0.4404, -0.02) node[below]{$F(4)$}
+	-- (0.4404, 0.02);
+	\draw (0.6159, -0.02) node[below]{$F(5)$}
+	-- (0.6159, 0.02);
+	\draw (0.7621, -0.02) node[below]{$\hdots$}
+	-- (0.7621, 0.02);
+	\draw (0.8666, -0.02) -- (0.8666, 0.02);
+	\draw (0.9319, -0.02) -- (0.9319, 0.02);
+	\draw (0.9681, -0.02) -- (0.9681, 0.02);
+	\draw (0.9863, -0.02) -- (0.9863, 0.02);
+	\end{tikzpicture}
+	\caption{The unit interval divided into sections according to the Poisson distribution function when $\lambda = 5$}
+	\label{fig:inverse}
+\end{figure}
+
+We can easily make this procedure exact by sampling the digits of $X$ one by one and computing the leading digits of $F$ for the various relevant values of $n$. Eventually we'll have $X$ completely fenced in between $F(n)$ and $F(n+1)$ for some $n$, at which point none of the remaining digits of any of the involved quantities matter, so we can return $n+1$.
+
+\section{Exact Rejection Sampling}
+
+Finally, we'll turn our attention to continuous distributions. Immediately a problem presents itself here. That is, a sample from a continuous distribution will typically be an irrational number with infinitely many digits in its decimal representation. How can we hope to draw an exact sample if just printing it out is an indeterminate process?\\
+Clearly, we'll have to manage our expectations as to what we can accomplish here. But if all we ask for is a method that will produce arbitrarily many correct digits of an exact sample, then the standard toolbox already provides plenty of options.
+
+Take the well known inverse sampling method. In the case of the exponential distribution with $\lambda = 1$ this method amounts to simply computing $-\ln(1-X)$ where $X \sim \text{U}[0,1]$. This task can be performed to arbitrary precision. So in the sense just described exact sampling would be quite uninteresting.
+
+But there's another sense in which exact sampling can be accomplished which isn't quite as trivial. We can try to sample just the leading digits of an exact sample so that the remaining digits then no longer depend on the distribution we're sampling from. In particular we'll see a way to sample leading digits, which we'll call a prefix, so that the remaining digits will be uniformly random. A prefix thus completely captures the characteristics of the distribution and so can arguably be referred to as an exact sample.
+
+The tool we'll use to accomplish this is a modification of \textit{rejection sampling}. The method of rejection sampling goes back to John von Neumann. It works by drawing from a \textit{proposal} distribution and then either accepting this value as a sample from the desired \textit{target} distribution or rejecting it and starting over. For instance, let's just use the uniform distribution on $[0,1]$ is our proposal distribution, because that's what our infinite stream of random bits most readily supplies. And as our target distribution we'll use the distribution with density
+\[
+f(x)=
+\begin{cases}
+2x & 0 \leq x < 1\\
+0 & \text{otherwise}
+\end{cases}\,.
+\]
+Rejection sampling then says to do the following:
+\begin{enumerate}
+	\item Draw a sample $x$ from the proposal distribution U$[0,1]$
+	\item Accept $x$ as the sample with probability $\frac{2x}{2} = x$ (we'll do so by comparing $2x$ to another sample from U$[0,2]$)
+	\item If $x$ was rejected, start over
+\end{enumerate}
+These steps can be visualized as in figure \ref{fig:rejection_0}. We draw a sample from the 2D-uniform distribution on the rectangle enclosing our target density function. If it falls below the density function, the x-coordinate of that point becomes the sample.
+
+\begin{figure}
+	\centering
+	\begin{tikzpicture}[scale=1.3]
+	\begin{axis}
+	\path[fill=gray!15] (0, 0) -- (100, 0) -- (100, 200) -- cycle;
+	\addplot[mark=none,very thick,color=blue] coordinates {(0, 0) (1, 2)};
+	\node[circle,fill=red,scale=0.5] at (60, 70) {};
+	\end{axis}
+	\end{tikzpicture}
+	\caption{Rejection Sampling --- Samples that fall in the shaded region (as shown) are accepted}
+	\label{fig:rejection_0}
+\end{figure}
+
+There are plenty of expositions in the literature that give a more thorough justification of these steps. The way this is usually implemented is by approximating the uniform distribution using some finite number of bits, inevitably incurring some error. But using exact Bernoulli sampling we can do better.
+
+In essence, we'll consider the rectangle defined by the leading digits of $x$ and $y$. By drawing additional digits for $x$ and $y$ we can shrink this rectangle arbitrarily small until we're certain that it falls either wholly below or above $f$. At that point we know whether to accept or reject, without having to examine further digits. Let's walk through an example.
+
+Suppose the leading bits of our uniform sample $x$ for the x-coordinate are $101...\,.$ This narrows down our sample to the interval [0.625, 0.75]. We can think of this as defining a $\delta$-environment from basic calculus. This in turn defines a corresponding $\epsilon$-environment [1.25, 1.5] into which $2x$ falls.
+
+Furthermore, let's imagine that the leading bits of our second sample $y$, drawn from U[0, 2], were $1001...\,.$ This allows us to narrow down $y$ to [1.125, 1.375]. Figure \ref{fig:rejection_1} shows what's going on.
+
+\begin{figure}[h]
+	\centering
+	\begin{tikzpicture}[scale=1.3]
+	\begin{axis}
+	\path[fill=gray!15] (10, 137.5) -- (90, 137.5) -- (90, 150) -- (10, 150);
+	
+	\path[fill=gray!30] (20, 125) -- (90, 125) -- (90, 137.5) -- (20, 137.5);
+	
+	\path[fill=gray!15] (10, 125) -- (20, 125) -- (20, 137.5) -- (10, 137.5);
+	
+	\path[fill=gray!15] (90, 125) -- (100, 125) -- (100, 137.5) -- (90, 137.5);
+	
+	\path[fill=gray!15] (20, 112.5) -- (100, 112.5) -- (100, 125) -- (20, 125);
+	
+	\addplot[mark=none,very thick, color=blue] coordinates {(0, 0) (1, 2)};
+	
+	\draw[dashed] (62.5, 0) -- (62.5, 200);
+	\draw[dashed] (75, 0) -- (75, 200);
+	
+	\draw[dashed] (10, 150) -- (90, 150);
+	\draw[dashed] (10, 125) -- (90, 125);
+	
+	\draw[dashed] (20, 137.5) -- (100, 137.5);
+	\draw[dashed] (20, 112.5) -- (100, 112.5);
+	
+	\draw[decoration={brace, mirror}, decorate] (101, 112.5) -- node[right] {$y$} (101, 137.5);
+	
+	\draw[decoration={brace}, decorate] (9, 125) -- node[left] {$f(x)$} (9, 150);
+	
+	\draw[decoration={brace, mirror}, decorate] (62.5, -1) -- node[below] {$x$} (75, -1);
+	\end{axis}
+	\end{tikzpicture}
+	\caption{Having drawn $x = 0.101..._2$ and $y = 1.001..._2$ we know that $f(x)$ and $y$ fall somewhere into these intervals}
+	\label{fig:rejection_1}
+\end{figure}
+
+Now these intervals for $f(x)$ and $y$ overlap. So we can't say for certain whether $x$ should be rejected or not. But that's easy to remedy. Just draw additional bits for $x$ and $y$. Sooner or later (and chances are sooner) these intervals will separate. And then we'll know whether to accept $x$ or to try again.
+
+But note that something remarkable happens as soon as we accept $x$. At that point we've determined some of the leading bits of $x$ through careful testing with the rejection method. But the remaining bits can now be drawn from our infinite random bit supply without any further thought! We can forget all about the function $f(x)=2x$ and just pump out the remaining bits of our sample as fast as our random number generator is able to mint them.
+
+\section{Putting It All Together}
+
+Now let's take these two previous ideas and put them together. How could we draw an exact sample from the standard normal distribution? At this point it's simple. First, use exact bisection sampling and perform a random walk on the integers, starting at 0. As soon as the sample has been narrowed down to an interval of unit length, the integer part of the sample has been determined. Then use exact rejection sampling to determine the fractional part. That's all there is to it. We can now easily produce the digits of an exactly standard normally distributed sample to our hearts content.\\
+
+At this point it seems worth reflecting a little more generally. First, because we're eventually just passing through random bits, this algorithm can easily be seen to be asymptotically optimal. We'll examine the exact meaning of "eventually" in section 7. For now, let's direct our attention to the bits required to sample $x$ during the rejection sampling stage. A few of these bits will be discarded while we iterate the rejection method. But the rest is then returned completely unmodified. A different way of looking at this is that we're taking a sample from the uniform distribution and sawing off a little piece at the front. The tail end is then precisely the fractional part of a random variable having practically any desired continuous distribution.
+
+Furthermore, we could have used the exact same sequence to also draw an exact sample from some other unrelated distribution. These two samples would then be correlated in the curious way that, at some offset, eventually all of their digits coincide. Stated differently, if one looks at a sample from the uniform distribution, chances are that, \textit{within eyesight}, one can see the superimposed beginnings of samples from any continuous distribution one can care to mention.
+
+Finally, consider the following. After having determined the leading digits of a sample from some distribution, we could write them down on a slip of paper and pass it to somebody else. We'll call such string of digits a \textit{prefix}. That person wouldn't even have to know which distribution the prefix was drawn from. They would still hold in their hands an \textit{exact} sample. If they're unsatisfied with the precision of the prefix we gave them, they can just add their own random digits! In very much the same way that the symbol $\pi$ summarizes an infinite sequence of digits, so do the digits on that slip of paper.
+
+As an aside, it is also possible, in a sense, to reconstitute a prefix once many random digits have already been attached. Though this may easily be a different prefix and one does now need the density $f$ of the distribution from which the sample is drawn. The idea is to simply perform rejection sampling using $f$ as a proposal density and the uniform as the target distribution. As soon as a uniform has been successfully drawn, one can be confident that the remaining, unexamined digits are uniform, thus the digits consumed so far constitute a prefix. One caveat here is that one has to condition and rescale $f$ every time a rejection takes place, because, unlike with the uniform distribution, the trailing digits of $f$ are unlikely to again be distributed according to $f$. While this would be a daunting challenge to program, considering one requires arbitrary precision, there is nothing that prevents this in principle.
+
+Now it is tempting to refer to the distribution of numbers that we could write on that slip of paper as a \textit{prefix distribution}. There's just one slight wrinkle that we have to iron out before we're fully justified to make that designation. The problem is that distinct prefixes may denote the same real number. Take the prefixes $0$ and $00$. Both of these designate distinct prefixes. One cannot replace one with the other without altering the underlying distribution that one is sampling. But if forced to map these to real numbers one would end up on the same point on the number line.
+
+The way out here is to realize that we're free to add some random bits of our own before passing along the slip of paper. So all we do is sample bits until we hit a $1$. At that point our prefix designates a unique real number and we terminate. In effect we've just done a little part of the other person's job. Let's refer to these elongated prefixes as \textit{padded prefixes} as opposed to \textit{unpadded prefixes} for their unmodified counterparts. If it is clear from context we'll also often just use the term \textit{prefix} for either version.
+
+\begin{thebibliography}{1}
+
+\end{thebibliography}
+
+\vfill\eject
+
+\end{document}
