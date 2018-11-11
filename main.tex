@@ -139,7 +139,7 @@ Take the well known inverse sampling method. In the case of the exponential dist
 
 But there's another sense in which exact sampling can be accomplished which isn't quite as trivial. We can try to sample just the leading digits of an exact sample so that the remaining digits then no longer depend on the distribution we're sampling from. In particular we'll see a way to sample leading digits, which we'll call a prefix, so that the remaining digits will be uniformly random. A prefix thus completely captures the characteristics of the distribution and so can arguably be referred to as an exact sample.
 
-The tool we'll use to accomplish this is a modification of \textit{rejection sampling}. The method of rejection sampling goes back to John von Neumann. It works by drawing from a \textit{proposal} distribution and then either accepting this value as a sample from the desired \textit{target} distribution or rejecting it and starting over. For instance, let's just use the uniform distribution on $[0,1]$ is our proposal distribution, because that's what our infinite stream of random bits most readily supplies. And as our target distribution we'll use the distribution with density
+The tool we'll use to accomplish this is a modification of \textit{rejection sampling}. The method of rejection sampling goes back to John von Neumann. It works by drawing from a \textit{proposal} distribution and then either accepting this value as a sample from the desired \textit{target} distribution or rejecting it and starting over. For instance, let's just use the uniform distribution on $[0,1]$ as our proposal distribution, because that's what our infinite stream of random bits most readily supplies. And as our target distribution we'll use the distribution with density
 \[
 f(x)=
 \begin{cases}
@@ -150,10 +150,10 @@ f(x)=
 Rejection sampling then says to do the following:
 \begin{enumerate}
 	\item Draw a sample $x$ from the proposal distribution U$[0,1]$
-	\item Accept $x$ as the sample with probability $\frac{2x}{2} = x$ (we'll do so by comparing $2x$ to another sample from U$[0,2]$)
+	\item Accept $x$ as the sample with probability $\frac{2x}{2} = x$ (we'll do so by comparing $2x$ to another sample $y$ drawn from U$[0,2]$)
 	\item If $x$ was rejected, start over
 \end{enumerate}
-These steps can be visualized as in figure \ref{fig:rejection_0}. We draw a sample from the 2D-uniform distribution on the rectangle enclosing our target density function. If it falls below the density function, the x-coordinate of that point becomes the sample.
+These steps can be visualized as in figure \ref{fig:rejection_0}. We draw a sample $(x,y)$ from the 2D-uniform distribution on the rectangle enclosing our target density function. If it falls below the density function, the x-coordinate of that point becomes the sample.
 
 \begin{figure}
 	\centering
@@ -172,7 +172,7 @@ There are plenty of expositions in the literature that give a more thorough just
 
 In essence, we'll consider the rectangle defined by the leading digits of $x$ and $y$. By drawing additional digits for $x$ and $y$ we can shrink this rectangle arbitrarily small until we're certain that it falls either wholly below or above $f$. At that point we know whether to accept or reject, without having to examine further digits. Let's walk through an example.
 
-Suppose the leading bits of our uniform sample $x$ for the x-coordinate are $101...\,.$ This narrows down our sample to the interval [0.625, 0.75]. We can think of this as defining a $\delta$-environment from basic calculus. This in turn defines a corresponding $\epsilon$-environment [1.25, 1.5] into which $2x$ falls.
+Suppose the leading bits of our uniform sample $x$ are $101...\,.$ This narrows down our sample to the interval [0.625, 0.75]. We can think of this as defining a $\delta$-environment from basic calculus. This in turn defines a corresponding $\epsilon$-environment [1.25, 1.5] into which $f(x)=2x$ falls.
 
 Furthermore, let's imagine that the leading bits of our second sample $y$, drawn from U[0, 2], were $1001...\,.$ This allows us to narrow down $y$ to [1.125, 1.375]. Figure \ref{fig:rejection_1} shows what's going on.
 
